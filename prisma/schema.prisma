@@ -1,0 +1,204 @@
+// это все не SQL, не пострегсс
+
+generator client { // есть опред клиент жаваскриптовский + он создает тс файл
+  provider = "prisma-client-js" // работай именно жс 
+}
+
+datasource db { // с какой бд работает
+  provider = "postgresql"
+  url = env("POSTGRES_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING") // uses a direct connection
+}
+
+// Таблица
+model User {
+  // 1) название 2) type 3) делаем уникальным 4) пред ид юзер + 1
+  id Int @id @default(autoincrement())
+
+  fullName String
+  email String @unique // - проверка на уник., на уровне бд (пострегсс, монгобд, скл итд)
+  password String 
+  role UserRole @default(USER)
+  verified DateTime?
+
+  // обычно делается массив таких соц.сетей 21:05
+  provider String? // какая соц.сеть привязана к юзеру
+  providerId String? // если логин пароль, то нет
+  // храним айди провайдера
+
+  cart Cart?
+  orders Order[] // many orders
+  verificationCode VerificationCode?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Category {
+  id Int @id @default(autoincrement())
+  name String @unique
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt // можно было не делать
+}
+
+model Product {
+  id Int @id @default(autoincrement())
+
+  name String // мб одинак. назв
+  imageUrl String
+
+  // many to many
+  ingredients Ingredient[]
+  items ProductItem[] // там же есть прайс, даже если это кофе
+
+  // one to many
+  // category Category для жс
+  // жс найди в наших полях, поле categoryId, и ищи его
+  // references: [id] - это поле в Category - id
+  // и будет искать например id 4
+  category Category @relation(fields: [categoryId], references: [id])
+  categoryId Int // для дб 
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProductItem {
+  id Int @id @default(autoincrement())
+
+  price Int
+  size Int? // ? - optional
+  pizzaType Int?
+
+  cartItems CartItem[]
+
+  product Product @relation(fields: [productId], references: [id])
+  productId Int
+}
+
+model Ingredient {
+  id Int @id @default(autoincrement())
+
+  name String
+  price Int
+  imageUrl String
+
+  products Product[] // ингр. могут иметь множество продуктов
+  cartItems CartItem[] // можно было не делать (но в призме нельзя делать ток, 1 связь)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Cart { // корзина
+  id Int @id @default(autoincrement())
+
+  user User? @relation(fields: [userId], references: [id])
+  userId Int? @unique
+
+  items CartItem[]
+
+  token String // не зареган., токен + коризна
+
+  totalAmount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CartItem {
+  id Int @id @default(autoincrement())
+
+  cart Cart @relation(fields: [cartId], references: [id])
+  cartId Int
+
+  productItem ProductItem @relation(fields: [productItemId], references: [id])
+  productItemId Int
+
+  quantity Int @default(1)
+
+  ingredients Ingredient[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Order {
+  id Int @id @default(autoincrement())
+
+  user User? @relation(fields: [userId], references: [id])
+  userId Int?
+
+  // должны знать какой токен, можно было и создать тут, но этот вар. по лучше
+  // cart Cart @relation(fields: [cartId], references: [id])
+  // cartId Int
+  token String
+
+  totalAmount Int
+  status OrderStatus @default(PENDING)
+  paymentId String? // какой был ид на ур. Юмани у этого заказа
+  //  возврат заказа типо, окей какой у тя ID
+
+  items Json // можн было CartItem[] итд.
+  // какие товары именно оформляем
+
+  // если захотим кому то сделать заказ
+  fullName String
+  email String
+  phone String
+  address String
+  comment String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// можно было не делать, пошта мы делаем без регистра
+// поэтому коду будем делать можно ли создавать заказ или нет
+model VerificationCode {
+  id Int @id @default(autoincrement())
+
+  user User @relation(fields: [userId], references: [id])
+  userId Int @unique
+  
+  code String // не uniq, у разных людей мб 1 код
+
+  // expires - делаем на ур. жс
+  createdAt DateTime @default(now())
+
+  // если оба похожи, то код не создается
+  @@unique([userId, code])
+}
+
+model Story {
+  id Int @id @default(autoincrement())
+  previewImageUrl String
+
+  items StoryItem[]
+
+  createdAt DateTime @default(now())
+}
+
+model StoryItem {
+  id Int @id @default(autoincrement())
+
+  storyId Int // к какому родаку принад. этот стори айтем
+  story Story @relation(fields: [storyId], references: [id])
+
+  sourceUrl String
+  
+  createdAt DateTime @default(now())
+}
+
+enum OrderStatus {
+  PENDING
+  SUCCEEDED
+  CANCALLED
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
